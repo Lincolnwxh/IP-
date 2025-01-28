@@ -1,0 +1,129 @@
+import pandas as pd
+import streamlit as st
+
+
+# 页面标题
+st.title("股权分配与收益计算工具")
+
+# 输入区
+st.header("输入区")
+col1, col2 = st.columns(2)
+
+with col1:
+    total_equity = st.number_input("总股权（%）", value=100.0, min_value=0.0, max_value=100.0)
+    founder_equity = st.number_input("创始人现有股权（%）", value=52.0, min_value=0.0, max_value=100.0)
+    option_pool = st.number_input("期权池比例（%）", value=10.0, min_value=0.0, max_value=100.0)
+    investment_amount = st.number_input("融资金额（万元）", value=5000.0, min_value=0.0)
+
+with col2:
+    investor_ratio = st.number_input("投资人出资比例（%）", value=20.0, min_value=0.0, max_value=100.0)
+    gmv = st.number_input("GMV总额（万元）", value=20000.0, min_value=0.0)
+    ip_count = st.number_input("IP数目", value=15, min_value=0)
+    profit_ratio = st.number_input("盈利分红比例（%）", value=5.0, min_value=0.0, max_value=100.0)
+
+
+# 验证IP权重总和
+def validate_ip_weights(ip_weights):
+    total_weight = sum(ip_weights)
+    if abs(total_weight - 100) > 0.01:
+        st.error(f"IP权重总和应为100%，当前总和为{total_weight}%")
+        return False
+    return True
+
+
+# IP权重输入
+st.subheader("IP权重分配")
+ip_data = []
+ip_weights = []
+for i in range(ip_count):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        ip_name = st.text_input(f"IP{i + 1} 名称", value=f"IP{i + 1}")
+    with col2:
+        ip_category = st.selectbox(f"IP{i + 1} 类别", ["头部", "腰部", "素人"], key=f"cat{i}")
+    with col3:
+        ip_weight = st.number_input(f"IP{i + 1} 权重（%）", value=5.0, min_value=0.0, max_value=100.0, key=f"weight{i}")
+        ip_weights.append(ip_weight)
+    ip_data.append({"名称": ip_name, "类别": ip_category, "权重": ip_weight})
+
+ip_df = pd.DataFrame(ip_data)
+
+# 计算逻辑
+def calculate_equity():
+    try:
+        # 投资人股权
+        investor_equity = investor_ratio
+
+        # 创始人股权
+        founder_diluted = founder_equity * (1 - investor_ratio / 100)
+
+        # 期权池股权
+        option_pool_equity = option_pool * (1 - investor_ratio / 100)
+
+        # IP分类股权
+        ip_equity = {}
+        for category in ["头部", "腰部", "素人"]:
+            category_weight = ip_df[ip_df["类别"] == category]["权重"].sum()
+            ip_equity[category] = category_weight * option_pool_equity / 100
+
+        # 总股权检查
+        total_calculated = founder_diluted + investor_equity + option_pool_equity
+        if abs(total_calculated - total_equity) > 0.01:
+            st.warning(f"总股权计算不一致：{total_calculated}%")
+
+        return {
+            "创始人": founder_diluted,
+            "投资人": investor_equity,
+            "期权池": option_pool_equity,
+            **{f"{k}IP": v for k, v in ip_equity.items()}
+        }
+    except ZeroDivisionError:
+        st.error("出现除零错误，请检查输入数据")
+
+
+def calculate_profit(equity):
+    try:
+        total_profit = gmv * (profit_ratio / 100)
+        profit_distribution = {k: v * total_profit / 100 for k, v in equity.items()}
+        return profit_distribution
+    except ZeroDivisionError:
+        st.error("出现除零错误，请检查输入数据")
+
+
+# 输出区
+st.header("输出区")
+
+if st.button("计算"):
+    if validate_ip_weights(ip_weights):
+        equity_distribution = calculate_equity()
+        if equity_distribution:
+            profit_distribution = calculate_profit(equity_distribution)
+
+            # 显示股权分配
+            st.subheader("股权分配")
+            equity_df = pd.DataFrame(list(equity_distribution.items()), columns=["股东类型", "股权比例（%）"])
+            st.dataframe(equity_df)
+
+            # 显示收益分配
+            st.subheader("收益分配")
+            profit_df = pd.DataFrame(list(profit_distribution.items()), columns=["股东类型", "收益分配（万元）"])
+            st.dataframe(profit_df)
+
+            # 可视化
+            st.subheader("可视化")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.bar_chart(equity_df.set_index("股东类型"), use_container_width=True,
+                             height=300,
+                             ylabel="股权比例（%）")
+            with col2:
+                st.bar_chart(profit_df.set_index("股东类型"), use_container_width=True,
+                             height=300,
+                             ylabel="收益分配（万元）")
+
+
+# 运行说明
+st.sidebar.markdown("### 使用说明")
+st.sidebar.write("1. 在输入区填写公司数据。")
+st.sidebar.write("2. 为每个IP分配权重和类别。")
+st.sidebar.write("3. 点击“计算”按钮查看结果。")

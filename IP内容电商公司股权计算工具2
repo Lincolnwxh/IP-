@@ -1,0 +1,144 @@
+import streamlit as st
+
+# 设置页面配置，添加图标和标题
+st.set_page_config(page_title="IP 投资股权分配计算工具", page_icon=":chart_with_upwards_trend:")
+
+# 自定义 CSS 样式，增加科技感
+st.markdown(
+    """
+    <style>
+        body {
+            background-color: #0e1117;
+            color: white;
+        }
+        .stButton>button {
+            background-color: #0078d4;
+            color: white;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .stTextInput>div>div>input {
+            background-color: #1e2127;
+            color: white;
+            border: 1px solid #333;
+        }
+        .stSelectbox>div>div>select {
+            background-color: #1e2127;
+            color: white;
+            border: 1px solid #333;
+        }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
+# 页面标题
+st.title("IP 投资股权分配计算工具")
+
+# 输入区
+st.header("输入区")
+
+# 创始人团队信息
+founder_equity = 52
+
+# 素人 IP 信息
+num_amateur_ips = 7
+total_funding = 200
+min_investment_per_ip = 10
+max_investment_per_ip = 30
+
+amateur_ip_investments = []
+amateur_ip_profits = []
+amateur_ip_years_invested = []
+
+for i in range(num_amateur_ips):
+    st.subheader(f"素人 IP {i + 1} 信息")
+    st.markdown(f"起投金额 10 万，封顶 30 万")
+    investment = st.number_input(f"素人 IP {i + 1} 投资额（万元）", min_value=min_investment_per_ip,
+                                 max_value=max_investment_per_ip, value=min_investment_per_ip)
+    profit = st.number_input(f"素人 IP {i + 1} 产生的利润（万元）", min_value=0.0)
+    years_invested = st.number_input(f"素人 IP {i + 1} 已投资年数", min_value=0, value=0, step=1)
+    amateur_ip_investments.append(investment)
+    amateur_ip_profits.append(profit)
+    amateur_ip_years_invested.append(years_invested)
+
+company_total_profit = st.number_input("公司总利润（万元）", min_value=0.0)
+company_valuation = st.number_input("公司估值（万元）", min_value=0.0)
+
+# 显示固定股权及动态股权计算公式
+st.markdown("### 股权计算公式说明")
+st.markdown("- **固定财务投资股权比例**：每个素人 IP 的财务投资金额占所有素人 IP 总财务投资金额的比例，再乘以剩余股权的 50%。公式为：`财务投资股权比例 = (单个 IP 投资额 / 总财务投资额) * (100 - 创始人股权比例) * 0.5`")
+st.markdown("- **动态 IP 账号收益股权比例**：每个素人 IP 的 IP 账号直接收益占所有素人 IP 总 IP 账号直接收益的比例，再乘以剩余股权的 50%。公式为：`IP 账号收益股权比例 = (单个 IP 账号直接收益 / 总 IP 账号直接收益) * (100 - 创始人股权比例) * 0.5`，其中单个 IP 账号直接收益 = 该 IP 产生的利润 * 0.5")
+
+# 计算逻辑
+if st.button("计算"):
+    total_amateur_investment = sum(amateur_ip_investments)
+    if total_amateur_investment > total_funding:
+        st.error("素人 IP 总投资额超过了总融资额，请调整投资额。")
+    else:
+        # 计算财务投资占比
+        total_financial_investment = total_amateur_investment
+        financial_investment_ratios = [inv / total_financial_investment for inv in amateur_ip_investments]
+
+        # 计算 IP 账号直接收益
+        total_ip_profit = sum(amateur_ip_profits)
+        amateur_ip_direct_profit_shares = [0.5 * profit for profit in amateur_ip_profits]
+        company_direct_profit_share = 0.5 * total_ip_profit
+
+        # 计算总剩余股权
+        total_equity = 100
+        remaining_equity = total_equity - founder_equity
+
+        # 计算财务投资收益对应的股权
+        financial_equities = [ratio * remaining_equity * 0.5 for ratio in financial_investment_ratios]
+
+        # 计算 IP 账号直接收益对应的股权
+        direct_profit_equities = []
+        for profit_share in amateur_ip_direct_profit_shares:
+            if total_ip_profit == 0:
+                direct_profit_equity = 0
+            else:
+                direct_profit_equity = (profit_share / total_ip_profit) * remaining_equity * 0.5
+            direct_profit_equities.append(direct_profit_equity)
+
+        # 计算每个素人 IP 的总股权
+        amateur_ip_total_equities = [fin + dir for fin, dir in zip(financial_equities, direct_profit_equities)]
+
+        # 计算素人 IP 年收益
+        amateur_ip_annual_earnings = []
+        for fin_equity, dir_equity in zip(financial_equities, direct_profit_equities):
+            earnings = company_total_profit * (fin_equity / 100) + company_total_profit * (dir_equity / 100)
+            amateur_ip_annual_earnings.append(earnings)
+
+        # 输出结果
+        st.header("输出区")
+        st.subheader("股权分配结果")
+        st.write(f"创始人团队股权比例: {founder_equity}%")
+
+        st.subheader("素人 IP 固定财务投资股权分配")
+        for i in range(num_amateur_ips):
+            st.write(f"素人 IP {i + 1} 财务投资股权比例: {financial_equities[i]:.2f}%")
+
+        st.subheader("素人 IP 动态 IP 账号收益股权分配")
+        for i in range(num_amateur_ips):
+            st.write(f"素人 IP {i + 1} IP 账号收益股权比例: {direct_profit_equities[i]:.2f}%")
+
+        st.subheader("素人 IP 总股权分配")
+        for i in range(num_amateur_ips):
+            st.write(f"素人 IP {i + 1} 总股权比例: {amateur_ip_total_equities[i]:.2f}%")
+
+        # 显示收益计算公式
+        st.markdown("### 素人 IP 年收益计算公式说明")
+        st.markdown("素人 IP 年收益 = 公司总利润 * 财务股权分红比例 + 公司总利润 * IP 账号利润股权比例。即：`年收益 = 公司总利润 * (财务投资股权比例 / 100) + 公司总利润 * (IP 账号收益股权比例 / 100)`")
+
+        st.subheader("素人 IP 年收益结果")
+        for i in range(num_amateur_ips):
+            st.write(f"素人 IP {i + 1} 年收益: {amateur_ip_annual_earnings[i]:.2f} 万元")
+
+        st.subheader("素人 IP 退出机制结果")
+        for i in range(num_amateur_ips):
+            if amateur_ip_years_invested[i] < 2:
+                buyback_price = 0
+            else:
+                buyback_price = company_valuation * (amateur_ip_total_equities[i] / 100)
+            st.write(f"素人 IP {i + 1} 若退出，公司回购价格: {buyback_price:.2f} 万元")
